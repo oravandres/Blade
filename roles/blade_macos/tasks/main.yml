@@ -1,0 +1,61 @@
+---
+- name: Verify target OS is macOS
+  ansible.builtin.assert:
+    that:
+      - ansible_system == "Darwin"
+    fail_msg: "This playbook is for macOS only."
+
+- name: Detect Homebrew binary
+  ansible.builtin.shell: |
+    set -e
+    if [ -x /opt/homebrew/bin/brew ]; then
+      echo /opt/homebrew/bin/brew
+    elif [ -x /usr/local/bin/brew ]; then
+      echo /usr/local/bin/brew
+    else
+      echo missing
+    fi
+  args:
+    executable: /bin/bash
+  register: brew_detect
+  changed_when: false
+
+- name: Install Homebrew if missing
+  ansible.builtin.shell: |
+    set -e
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  args:
+    executable: /bin/bash
+  when: brew_detect.stdout == "missing"
+
+- name: Set Homebrew binary path
+  ansible.builtin.set_fact:
+    brew_bin: "{{ '/opt/homebrew/bin/brew' if ansible_architecture == 'arm64' else '/usr/local/bin/brew' }}"
+
+- name: Update Homebrew metadata
+  ansible.builtin.command: "{{ brew_bin }} update"
+  changed_when: false
+
+- name: Check installed Homebrew formulae
+  ansible.builtin.command: "{{ brew_bin }} list --formula {{ item }}"
+  loop: "{{ blade_brew_formulae }}"
+  register: formula_checks
+  changed_when: false
+  failed_when: false
+
+- name: Install missing Homebrew formulae
+  ansible.builtin.command: "{{ brew_bin }} install {{ item.item }}"
+  loop: "{{ formula_checks.results }}"
+  when: item.rc != 0
+
+- name: Check installed Homebrew casks
+  ansible.builtin.command: "{{ brew_bin }} list --cask {{ item }}"
+  loop: "{{ blade_brew_casks }}"
+  register: cask_checks
+  changed_when: false
+  failed_when: false
+
+- name: Install missing Homebrew casks
+  ansible.builtin.command: "{{ brew_bin }} install --cask {{ item.item }}"
+  loop: "{{ cask_checks.results }}"
+  when: item.rc != 0

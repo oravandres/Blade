@@ -1,0 +1,6 @@
+all:
+  children:
+    macbook:
+      hosts:
+        blade:
+          ansible_connection: local

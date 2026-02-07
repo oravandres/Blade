@@ -1,0 +1,10 @@
+blade_brew_formulae:
+  - ansible
+  - kubectl
+  - helm
+  - k9s
+  - jq
+  - yq
+  - gh
+
+blade_brew_casks: []

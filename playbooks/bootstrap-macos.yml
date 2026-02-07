@@ -1,0 +1,6 @@
+---
+- name: Bootstrap Blade macOS dev machine
+  hosts: macbook
+  gather_facts: true
+  roles:
+    - blade_macos
