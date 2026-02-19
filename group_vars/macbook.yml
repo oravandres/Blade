@@ -10,9 +10,7 @@ blade_brew_formulae:
 blade_brew_casks: []
 
 blade_ollama_models:
-  - "qwen3:8b"
-  - "qwen3:1.7b"
-  - "deepseek-r1:8b"
-  - "deepseek-r1:1.5b"
+  - "qwen3:72b"
+  - "deepseek-r1:70b"
 
 blade_ollama_models_dir: "/Volumes/Data/ollama/models"

@@ -39,23 +39,21 @@ Edit `group_vars/macbook.yml`:
 
 ```yaml
 blade_ollama_models:
-  - "qwen3:8b"
-  - "qwen3:1.7b"
-  - "deepseek-r1:8b"
-  - "deepseek-r1:1.5b"
+  - "qwen3:72b"
+  - "deepseek-r1:70b"
 
 blade_ollama_models_dir: "/Volumes/Data/ollama/models"
 ```
 
 Models are stored on the external SSD (`/Volumes/Data`) by default to keep the internal disk clean. Change `blade_ollama_models_dir` to any path you prefer.
 
-Larger variants (14b, 32b, 70b) are available if your Mac has enough RAM.
+Smaller variants (8b, 14b, 32b) are available if you need faster inference.
 
 After the playbook runs, verify with:
 
 ```bash
 ollama list               # show pulled models
-ollama run qwen3:8b       # interactive chat
+ollama run qwen3:72b      # interactive chat
 ```
 
 The Ollama API is available at `http://localhost:11434`.
