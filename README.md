@@ -2,8 +2,6 @@
 
 This repo bootstraps Blade as a macOS development machine.
 
-No k3s join logic is included.
-
 ## What it configures
 
 - Homebrew installation (if missing)
