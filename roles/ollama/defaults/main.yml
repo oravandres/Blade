@@ -1,14 +1,4 @@
-blade_brew_formulae:
-  - ansible
-  - kubectl
-  - helm
-  - k9s
-  - jq
-  - yq
-  - gh
-
-blade_brew_casks: []
-
+---
 blade_ollama_models:
   - "qwen3:8b"
   - "qwen3:1.7b"

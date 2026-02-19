@@ -1,0 +1,95 @@
+---
+- name: Check if Ollama is already installed
+  ansible.builtin.shell: |
+    if [ -d "/Applications/Ollama.app" ]; then
+      echo "installed"
+    elif command -v ollama &>/dev/null; then
+      echo "installed"
+    else
+      echo "missing"
+    fi
+  args:
+    executable: /bin/bash
+  register: ollama_check
+  changed_when: false
+
+- name: Install Ollama via Homebrew cask
+  ansible.builtin.command: "{{ brew_bin }} install --cask --force ollama"
+  when: ollama_check.stdout == "missing"
+
+- name: Launch Ollama app to initialize CLI
+  ansible.builtin.shell: |
+    open -a Ollama
+    sleep 5
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Locate Ollama CLI binary
+  ansible.builtin.shell: |
+    if command -v ollama &>/dev/null; then
+      command -v ollama
+    elif [ -x "/usr/local/bin/ollama" ]; then
+      echo "/usr/local/bin/ollama"
+    elif [ -x "/Applications/Ollama.app/Contents/Resources/ollama" ]; then
+      echo "/Applications/Ollama.app/Contents/Resources/ollama"
+    else
+      echo "not_found"
+    fi
+  args:
+    executable: /bin/bash
+  register: ollama_bin_result
+  changed_when: false
+
+- name: Set Ollama binary path
+  ansible.builtin.set_fact:
+    ollama_bin: "{{ ollama_bin_result.stdout }}"
+
+- name: Verify Ollama CLI works
+  ansible.builtin.command: "{{ ollama_bin }} --version"
+  register: ollama_version
+  changed_when: false
+
+- name: Create Ollama models directory on external disk
+  ansible.builtin.file:
+    path: "{{ blade_ollama_models_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Configure OLLAMA_MODELS environment via launchctl
+  ansible.builtin.command: launchctl setenv OLLAMA_MODELS {{ blade_ollama_models_dir }}
+  changed_when: true
+
+- name: Persist OLLAMA_MODELS in shell profile
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: 'export OLLAMA_MODELS="{{ blade_ollama_models_dir }}"'
+    regexp: '^export OLLAMA_MODELS='
+    create: true
+    mode: "0644"
+
+- name: Restart Ollama to pick up new models directory
+  ansible.builtin.shell: |
+    pkill -f Ollama || true
+    sleep 2
+    OLLAMA_MODELS={{ blade_ollama_models_dir }} open -a Ollama
+    sleep 5
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Get list of already-pulled models
+  ansible.builtin.command: "{{ ollama_bin }} list"
+  register: ollama_model_list
+  changed_when: false
+  environment:
+    OLLAMA_MODELS: "{{ blade_ollama_models_dir }}"
+
+- name: Pull configured Ollama models
+  ansible.builtin.command: "{{ ollama_bin }} pull {{ item }}"
+  loop: "{{ blade_ollama_models }}"
+  when: "item.split(':')[0] not in ollama_model_list.stdout or (item.split(':')[1] | default('latest')) not in ollama_model_list.stdout"
+  register: ollama_pull_result
+  changed_when: "'pulling' in ollama_pull_result.stdout | default('')"
+  environment:
+    OLLAMA_MODELS: "{{ blade_ollama_models_dir }}"
