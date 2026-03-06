@@ -1,53 +1,57 @@
 ---
-- name: Check if Ollama is already installed
-  ansible.builtin.shell: |
-    if [ -d "/Applications/Ollama.app" ]; then
-      echo "installed"
-    elif command -v ollama &>/dev/null; then
-      echo "installed"
-    else
-      echo "missing"
-    fi
-  args:
-    executable: /bin/bash
-  register: ollama_check
+- name: Check if Ollama Homebrew cask is installed
+  ansible.builtin.command: "{{ blade_brew_bin }} list --cask ollama"
+  register: blade_ollama_cask_check
   changed_when: false
+  failed_when: false
 
 - name: Install Ollama via Homebrew cask
-  ansible.builtin.command: "{{ brew_bin }} install --cask --force ollama"
-  when: ollama_check.stdout == "missing"
+  ansible.builtin.command: "{{ blade_brew_bin }} install --cask ollama"
+  register: blade_ollama_install
+  when: blade_ollama_cask_check.rc != 0
+  changed_when: true
 
-- name: Launch Ollama app to initialize CLI
-  ansible.builtin.shell: |
-    open -a Ollama
-    sleep 5
-  args:
-    executable: /bin/bash
-  changed_when: false
+- name: Upgrade Ollama via Homebrew cask
+  ansible.builtin.command: "{{ blade_brew_bin }} upgrade --cask ollama"
+  register: blade_ollama_upgrade_result
+  when:
+    - blade_ollama_cask_check.rc == 0
+    - blade_ollama_upgrade | bool
+  changed_when: >-
+    {{
+      'already installed' not in
+      ((blade_ollama_upgrade_result.stdout | default('')) ~ (blade_ollama_upgrade_result.stderr | default(''))) | lower
+      and 'latest version' not in
+      ((blade_ollama_upgrade_result.stdout | default('')) ~ (blade_ollama_upgrade_result.stderr | default(''))) | lower
+    }}
 
-- name: Locate Ollama CLI binary
-  ansible.builtin.shell: |
-    if command -v ollama &>/dev/null; then
-      command -v ollama
-    elif [ -x "/usr/local/bin/ollama" ]; then
-      echo "/usr/local/bin/ollama"
-    elif [ -x "/Applications/Ollama.app/Contents/Resources/ollama" ]; then
-      echo "/Applications/Ollama.app/Contents/Resources/ollama"
-    else
-      echo "not_found"
-    fi
-  args:
-    executable: /bin/bash
-  register: ollama_bin_result
+- name: Check standard Ollama CLI locations
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ blade_ollama_cli_candidates }}"
+  register: blade_ollama_cli_candidate_stats
   changed_when: false
 
 - name: Set Ollama binary path
   ansible.builtin.set_fact:
-    ollama_bin: "{{ ollama_bin_result.stdout }}"
+    blade_ollama_bin: >-
+      {{
+        (
+          blade_ollama_cli_candidate_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='item')
+          | first
+        ) | default('')
+      }}
+
+- name: Verify Ollama CLI binary exists
+  ansible.builtin.assert:
+    that:
+      - blade_ollama_bin | length > 0
+    fail_msg: "Ollama CLI was not found after installation."
 
 - name: Verify Ollama CLI works
-  ansible.builtin.command: "{{ ollama_bin }} --version"
-  register: ollama_version
+  ansible.builtin.command: "{{ blade_ollama_bin }} --version"
   changed_when: false
 
 - name: Create Ollama models directory on external disk
@@ -56,40 +60,78 @@
     state: directory
     mode: "0755"
 
+- name: Read launchctl OLLAMA_MODELS value
+  ansible.builtin.command: launchctl getenv OLLAMA_MODELS
+  register: blade_ollama_launchctl_models
+  changed_when: false
+  failed_when: false
+
 - name: Configure OLLAMA_MODELS environment via launchctl
   ansible.builtin.command: launchctl setenv OLLAMA_MODELS {{ blade_ollama_models_dir }}
+  when: blade_ollama_launchctl_models.stdout != blade_ollama_models_dir
   changed_when: true
+  notify:
+    - Stop Ollama
+    - Start Ollama
 
 - name: Persist OLLAMA_MODELS in shell profile
   ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.zshrc"
+    path: "{{ ansible_facts['env']['HOME'] }}/.zprofile"
     line: 'export OLLAMA_MODELS="{{ blade_ollama_models_dir }}"'
     regexp: '^export OLLAMA_MODELS='
     create: true
     mode: "0644"
 
-- name: Restart Ollama to pick up new models directory
-  ansible.builtin.shell: |
-    pkill -f Ollama || true
-    sleep 2
-    OLLAMA_MODELS={{ blade_ollama_models_dir }} open -a Ollama
-    sleep 5
-  args:
-    executable: /bin/bash
+- name: Check if Ollama app is already running
+  ansible.builtin.command: pgrep -f /Applications/Ollama.app
+  register: blade_ollama_process_check
+  changed_when: false
+  failed_when: false
+
+- name: Launch Ollama app
+  ansible.builtin.command: open -a Ollama
+  when:
+    - blade_ollama_process_check.rc != 0
+      or (blade_ollama_install is defined and blade_ollama_install is changed)
+      or (blade_ollama_upgrade_result is defined and blade_ollama_upgrade_result is changed)
   changed_when: true
 
+- name: Apply pending Ollama handler changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Ollama API to become available
+  ansible.builtin.uri:
+    url: http://127.0.0.1:11434/api/tags
+    method: GET
+    status_code: 200
+  register: blade_ollama_api_check
+  retries: 20
+  delay: 3
+  until: blade_ollama_api_check.status == 200
+  changed_when: false
+
 - name: Get list of already-pulled models
-  ansible.builtin.command: "{{ ollama_bin }} list"
-  register: ollama_model_list
+  ansible.builtin.command: "{{ blade_ollama_bin }} list"
+  register: blade_ollama_model_list
   changed_when: false
   environment:
     OLLAMA_MODELS: "{{ blade_ollama_models_dir }}"
 
+- name: Parse installed Ollama models
+  ansible.builtin.set_fact:
+    blade_ollama_installed_models: >-
+      {{
+        blade_ollama_model_list.stdout_lines[1:]
+        | map('trim')
+        | reject('equalto', '')
+        | map('regex_replace', '^([^\\s]+).*', '\\1')
+        | list
+      }}
+
 - name: Pull configured Ollama models
-  ansible.builtin.command: "{{ ollama_bin }} pull {{ item }}"
+  ansible.builtin.command: "{{ blade_ollama_bin }} pull {{ item }}"
   loop: "{{ blade_ollama_models }}"
-  when: "item.split(':')[0] not in ollama_model_list.stdout or (item.split(':')[1] | default('latest')) not in ollama_model_list.stdout"
-  register: ollama_pull_result
-  changed_when: "'pulling' in ollama_pull_result.stdout | default('')"
+  when: item not in blade_ollama_installed_models
+  changed_when: true
   environment:
     OLLAMA_MODELS: "{{ blade_ollama_models_dir }}"

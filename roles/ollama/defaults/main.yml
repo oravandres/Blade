@@ -1,6 +1,12 @@
 ---
 blade_ollama_models:
-  - "qwen2.5:72b"
   - "deepseek-r1:70b"
+  - "qwen3.5:35b"
+
+blade_ollama_cli_candidates:
+  - /opt/homebrew/bin/ollama
+  - /usr/local/bin/ollama
+  - /Applications/Ollama.app/Contents/Resources/ollama
 
 blade_ollama_models_dir: "/Volumes/Data/ollama/models"
+blade_ollama_upgrade: false

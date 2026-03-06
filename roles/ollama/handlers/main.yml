@@ -1,10 +1,10 @@
 ---
-- name: Restart Ollama
-  ansible.builtin.shell: |
-    pkill -f Ollama || true
-    sleep 1
-    open -a Ollama
-    sleep 3
-  args:
-    executable: /bin/bash
+- name: Stop Ollama
+  ansible.builtin.command: pkill -f /Applications/Ollama.app
+  register: blade_ollama_stop_result
+  changed_when: blade_ollama_stop_result.rc == 0
+  failed_when: blade_ollama_stop_result.rc not in [0, 1]
+
+- name: Start Ollama
+  ansible.builtin.command: open -a Ollama
   changed_when: true

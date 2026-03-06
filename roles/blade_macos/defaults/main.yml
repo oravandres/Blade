@@ -1,3 +1,19 @@
 ---
-blade_brew_formulae: []
+blade_brew_bin_candidates:
+  - /opt/homebrew/bin/brew
+  - /usr/local/bin/brew
+
+blade_brew_formulae_base:
+  - ansible
+  - kubectl
+  - helm
+  - k9s
+  - jq
+  - yq
+  - gh
+
+blade_brew_formulae_extra: []
+blade_brew_formulae: "{{ blade_brew_formulae_base + blade_brew_formulae_extra }}"
+
 blade_brew_casks: []
+blade_brew_update: true
