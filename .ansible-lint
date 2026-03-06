@@ -1,0 +1,4 @@
+exclude_paths:
+  - .tmp-lint/
+skip_list:
+  - var-naming[no-role-prefix]
