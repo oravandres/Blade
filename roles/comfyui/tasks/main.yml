@@ -1,0 +1,96 @@
+---
+- name: Check standard Python 3 locations for ComfyUI
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ blade_comfyui_python_candidates }}"
+  register: blade_comfyui_python_candidate_stats
+  changed_when: false
+
+- name: Set ComfyUI Python binary path
+  ansible.builtin.set_fact:
+    blade_comfyui_python_bin: >-
+      {{
+        (
+          blade_comfyui_python_candidate_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='item')
+          | first
+        ) | default('')
+      }}
+
+- name: Verify ComfyUI Python binary exists
+  ansible.builtin.assert:
+    that:
+      - blade_comfyui_python_bin | length > 0
+    fail_msg: "ComfyUI requires a python3 binary. Install python@3.11 or adjust blade_comfyui_python_candidates."
+
+- name: Create ComfyUI models root directory
+  ansible.builtin.file:
+    path: "{{ blade_comfyui_models_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Create ComfyUI model subdirectories
+  ansible.builtin.file:
+    path: "{{ blade_comfyui_models_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ blade_comfyui_model_subdirs }}"
+
+- name: Clone ComfyUI repository
+  ansible.builtin.git:
+    repo: "{{ blade_comfyui_repo }}"
+    version: "{{ blade_comfyui_repo_version }}"
+    dest: "{{ blade_comfyui_home }}"
+    update: true
+
+- name: Create extra_model_paths.yaml to point to external models
+  ansible.builtin.copy:
+    dest: "{{ blade_comfyui_home }}/extra_model_paths.yaml"
+    mode: "0644"
+    content: |
+      data:
+        base_path: "{{ blade_comfyui_models_dir }}"
+        checkpoints: checkpoints
+        clip: clip
+        vae: vae
+        unet: unet
+        text_encoders: text_encoders
+
+- name: Create Python virtual environment for ComfyUI
+  ansible.builtin.command: "{{ blade_comfyui_python_bin }} -m venv {{ blade_comfyui_home }}/venv"
+  args:
+    creates: "{{ blade_comfyui_home }}/venv"
+
+- name: Install ComfyUI dependencies (PyTorch etc)
+  ansible.builtin.pip:
+    name: "{{ blade_comfyui_pytorch_packages }}"
+    virtualenv: "{{ blade_comfyui_home }}/venv"
+
+- name: Install ComfyUI requirements.txt
+  ansible.builtin.pip:
+    requirements: "{{ blade_comfyui_home }}/requirements.txt"
+    virtualenv: "{{ blade_comfyui_home }}/venv"
+
+- name: Clone configured ComfyUI custom nodes
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    version: "{{ item.version }}"
+    dest: "{{ item.dest }}"
+    update: true
+  loop: "{{ blade_comfyui_custom_nodes }}"
+
+- name: Install ComfyUI custom node requirements
+  ansible.builtin.pip:
+    requirements: "{{ item.requirements }}"
+    virtualenv: "{{ blade_comfyui_home }}/venv"
+  loop: "{{ blade_comfyui_custom_nodes }}"
+
+- name: Download configured ComfyUI models
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ item.dest }}"
+    mode: "0644"
+    force: false
+  loop: "{{ blade_comfyui_model_downloads }}"
+  when: blade_comfyui_download_models | bool

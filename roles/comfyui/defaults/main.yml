@@ -1,0 +1,39 @@
+---
+blade_comfyui_enabled: false
+blade_comfyui_download_models: false
+
+blade_comfyui_home: "{{ ansible_facts['env']['HOME'] }}/ComfyUI"
+blade_comfyui_models_dir: "/Volumes/Data/comfyui/models"
+blade_comfyui_python_candidates:
+  - /opt/homebrew/bin/python3
+  - /usr/local/bin/python3
+  - /usr/bin/python3
+blade_comfyui_pytorch_packages:
+  - torch
+  - torchvision
+  - torchaudio
+
+blade_comfyui_repo: "https://github.com/comfyanonymous/ComfyUI.git"
+blade_comfyui_repo_version: "master"
+
+blade_comfyui_custom_nodes:
+  - name: ComfyUI-GGUF
+    repo: "https://github.com/city96/ComfyUI-GGUF.git"
+    version: "main"
+    dest: "{{ blade_comfyui_home }}/custom_nodes/ComfyUI-GGUF"
+    requirements: "{{ blade_comfyui_home }}/custom_nodes/ComfyUI-GGUF/requirements.txt"
+
+blade_comfyui_model_subdirs:
+  - checkpoints
+  - clip
+  - vae
+  - unet
+  - text_encoders
+
+blade_comfyui_model_downloads:
+  - url: "https://huggingface.co/unsloth/FLUX.2-dev-GGUF/resolve/main/flux2-dev-Q4_K_M.gguf"
+    dest: "{{ blade_comfyui_models_dir }}/unet/flux2-dev-Q4_K_M.gguf"
+  - url: "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_fp8.safetensors"
+    dest: "{{ blade_comfyui_models_dir }}/text_encoders/mistral_3_small_flux2_fp8.safetensors"
+  - url: "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors"
+    dest: "{{ blade_comfyui_models_dir }}/vae/flux2-vae.safetensors"

@@ -5,3 +5,5 @@
   roles:
     - blade_macos
     - ollama
+    - role: comfyui
+      when: blade_comfyui_enabled | default(false) | bool
